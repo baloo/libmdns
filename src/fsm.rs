@@ -13,11 +13,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::{net::UdpSocket, sync::mpsc};
+use tokio::sync::mpsc;
 
 use super::{DEFAULT_TTL, MDNS_PORT};
 use crate::address_family::AddressFamily;
 use crate::services::{ServiceData, Services};
+use crate::udp_socket::{Iface, UdpSocket};
 
 pub type AnswerBuilder = dns_parser::Builder<dns_parser::Answers>;
 
@@ -35,7 +36,7 @@ pub struct FSM<AF: AddressFamily> {
     socket: UdpSocket,
     services: Services,
     commands: mpsc::UnboundedReceiver<Command>,
-    outgoing: VecDeque<(Vec<u8>, SocketAddr)>,
+    outgoing: VecDeque<(Vec<u8>, (SocketAddr, Option<Iface>))>,
     _af: PhantomData<AF>,
 }
 
@@ -73,24 +74,24 @@ impl<AF: AddressFamily> FSM<AF> {
         Ok(())
     }
 
-    fn handle_packet(&mut self, buffer: &[u8], addr: SocketAddr) {
-        trace!("received packet from {:?}", addr);
+    fn handle_packet(&mut self, buffer: &[u8], src_addr: (SocketAddr, Option<Iface>)) {
+        trace!("received packet from {:?}", src_addr.0);
 
         let packet = match dns_parser::Packet::parse(buffer) {
             Ok(packet) => packet,
             Err(error) => {
-                warn!("couldn't parse packet from {:?}: {}", addr, error);
+                warn!("couldn't parse packet from {:?}: {}", src_addr.0, error);
                 return;
             }
         };
 
         if !packet.header.query {
-            trace!("received packet from {:?} with no query", addr);
+            trace!("received packet from {:?} with no query", src_addr.0);
             return;
         }
 
         if packet.header.truncated {
-            warn!("dropping truncated packet from {:?}", addr);
+            warn!("dropping truncated packet from {:?}", src_addr.0);
             return;
         }
 
@@ -120,12 +121,13 @@ impl<AF: AddressFamily> FSM<AF> {
         if !multicast_builder.is_empty() {
             let response = multicast_builder.build().unwrap_or_else(|x| x);
             let addr = SocketAddr::new(AF::MDNS_GROUP.into(), MDNS_PORT);
-            self.outgoing.push_back((response, addr));
+            self.outgoing
+                .push_back((response, (addr, src_addr.1.clone())));
         }
 
         if !unicast_builder.is_empty() {
             let response = unicast_builder.build().unwrap_or_else(|x| x);
-            self.outgoing.push_back((response, addr));
+            self.outgoing.push_back((response, src_addr));
         }
     }
 
@@ -213,7 +215,7 @@ impl<AF: AddressFamily> FSM<AF> {
         if !builder.is_empty() {
             let response = builder.build().unwrap_or_else(|x| x);
             let addr = SocketAddr::new(AF::MDNS_GROUP.into(), MDNS_PORT);
-            self.outgoing.push_back((response, addr));
+            self.outgoing.push_back((response, (addr, None)));
         }
     }
 }
@@ -245,7 +247,7 @@ impl<AF: Unpin + AddressFamily> Future for FSM<AF> {
         }
 
         while let Some((ref response, addr)) = pinned.outgoing.pop_front() {
-            trace!("sending packet to {:?}", addr);
+            trace!("sending packet to {:?}", addr.0);
 
             match pinned.socket.poll_send_to(cx, response, addr) {
                 Poll::Ready(Ok(bytes_sent)) if bytes_sent == response.len() => (),

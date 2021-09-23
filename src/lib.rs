@@ -15,6 +15,7 @@ use crate::dns_parser::Name;
 mod address_family;
 mod fsm;
 mod services;
+pub(crate) mod udp_socket;
 
 use crate::address_family::{Inet, Inet6};
 use crate::fsm::{Command, FSM};
