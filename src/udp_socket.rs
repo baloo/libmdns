@@ -44,12 +44,12 @@ impl UdpSocket {
         setsockopt(socket.as_raw_fd(), Ipv4PacketInfo, &true).map_err(|e| {
             io::Error::new(io::ErrorKind::Other, format!("IP_PKTINFO set error: {}", e))
         })?;
-        setsockopt(socket.as_raw_fd(), Ipv6RecvPacketInfo, &true).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("IPV6_RECVPKTINFO set error: {}", e),
-            )
-        })?;
+        //setsockopt(socket.as_raw_fd(), Ipv6RecvPacketInfo, &true).map_err(|e| {
+        //    io::Error::new(
+        //        io::ErrorKind::Other,
+        //        format!("IPV6_RECVPKTINFO set error: {}", e),
+        //    )
+        //})?;
         let socket = TUdpSocket::from_std(socket)?;
         Ok(Self(socket))
     }
