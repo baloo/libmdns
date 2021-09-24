@@ -1,7 +1,12 @@
 use super::MDNS_PORT;
+use nix::sys::socket::{
+    setsockopt,
+    sockopt::{Ipv4PacketInfo, Ipv6RecvPacketInfo},
+};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::os::unix::prelude::RawFd;
 
 pub enum Inet {}
 
@@ -35,6 +40,8 @@ pub trait AddressFamily {
         Self::join_multicast(&socket, &Self::MDNS_GROUP)?;
         Ok(socket.into())
     }
+
+    fn set_pkt_info(fd: RawFd) -> Result<(), io::Error>;
 }
 
 impl AddressFamily for Inet {
@@ -48,6 +55,13 @@ impl AddressFamily for Inet {
     fn join_multicast(socket: &Socket, multiaddr: &Self::Addr) -> io::Result<()> {
         socket.join_multicast_v4(multiaddr, &Ipv4Addr::UNSPECIFIED)
     }
+
+    fn set_pkt_info(fd: RawFd) -> Result<(), io::Error> {
+        setsockopt(fd, Ipv4PacketInfo, &true).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("IP_PKTINFO set error: {}", e))
+        })?;
+        Ok(())
+    }
 }
 
 impl AddressFamily for Inet6 {
@@ -60,5 +74,15 @@ impl AddressFamily for Inet6 {
 
     fn join_multicast(socket: &Socket, multiaddr: &Self::Addr) -> io::Result<()> {
         socket.join_multicast_v6(multiaddr, 0)
+    }
+
+    fn set_pkt_info(fd: RawFd) -> Result<(), io::Error> {
+        setsockopt(fd, Ipv6RecvPacketInfo, &true).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("IPV6_RECV_PKTINFO set error: {}", e),
+            )
+        })?;
+        Ok(())
     }
 }

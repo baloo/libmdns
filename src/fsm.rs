@@ -33,7 +33,7 @@ pub enum Command {
 }
 
 pub struct FSM<AF: AddressFamily> {
-    socket: UdpSocket,
+    socket: UdpSocket<AF>,
     services: Services,
     commands: mpsc::UnboundedReceiver<Command>,
     outgoing: VecDeque<(Vec<u8>, (SocketAddr, Option<Iface>))>,
@@ -44,7 +44,7 @@ impl<AF: AddressFamily> FSM<AF> {
     // Will panic if called from outside the context of a runtime
     pub fn new(services: &Services) -> io::Result<(FSM<AF>, mpsc::UnboundedSender<Command>)> {
         let std_socket = AF::bind()?;
-        let socket = UdpSocket::from_std(std_socket)?;
+        let socket = UdpSocket::<AF>::from_std(std_socket)?;
 
         let (tx, rx) = mpsc::unbounded_channel();
 
