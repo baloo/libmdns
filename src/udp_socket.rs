@@ -156,9 +156,9 @@ where
                 };
                 out.map_err(|e| {
                     if e == Errno::EAGAIN {
-                        io::Error::new(io::ErrorKind::WouldBlock, "recvmsg would block")
+                        io::Error::new(io::ErrorKind::WouldBlock, "sendmsg would block")
                     } else {
-                        io::Error::new(io::ErrorKind::Other, format!("recvmsg error: {}", e))
+                        io::Error::new(io::ErrorKind::Other, format!("sendmsg error: {}", e))
                     }
                 })
             }) {
