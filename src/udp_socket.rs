@@ -103,7 +103,8 @@ where
                             Ipv4PacketInfo(ipv4) => {
                                 output.replace(Iface::V4(ipv4));
                             }
-                            Ipv6PacketInfo(ipv6) => {
+                            Ipv6PacketInfo(mut ipv6) => {
+                                ipv6.ipi6_addr.s6_addr = [0u8; 16];
                                 output.replace(Iface::V6(ipv6));
                             }
                             _ => {}
